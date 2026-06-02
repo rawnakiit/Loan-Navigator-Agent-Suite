@@ -1,0 +1,20 @@
+# Environments
+# Local environment variables
+.env
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Data
+# Local database and amortization sheets
+data/LoanDB_BlueLoans4all.sqlite
+data/Sample_Amortization_Schedule.csv
+
+# Policy documents
+data/policies/*.pdf
+
+# GCP & IDEs
+.vscode/
+.gcp/
+
