@@ -54,7 +54,8 @@ if prompt := st.chat_input("Ask about your loan, policies, or run a simulation..
         with st.spinner("Thinking..."):
             try:
                 # Call the main supervisor function with the user's query
-                result = run_supervisor(prompt)
+                result = run_supervisor(query=prompt,
+                                        user_id="streamlit_user_01")
                 
                 # The final, user-friendly response is in the 'final_response' key
                 response = result.get("final_response", "Sorry, I encountered an error and couldn't process your request.")

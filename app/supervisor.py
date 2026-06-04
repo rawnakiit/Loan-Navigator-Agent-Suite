@@ -9,6 +9,8 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langfuse.langchain import CallbackHandler
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -158,11 +160,22 @@ app_graph = workflow.compile()
 
 
 # The entry point function remains the same
-def run_supervisor(query: str) -> dict:
+def run_supervisor(query: str, user_id:str="default-user") -> dict:
     """Entry point to trigger the workflow."""
+    langfuse_callback = CallbackHandler(
+        # public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+        # secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+        # # The 'trace_name' will be the name of the trace in the dashboard
+        # trace_name="LoanNavigator-Trace",
+        # # 'user_id' is a dedicated parameter for associating the trace with a user
+        # user_id=user_id,
+        # 'metadata' can hold any other custom info
+        # metadata={"query_source": "streamlit-ui"}
+    )
+
     initial_state = {
         "messages": [HumanMessage(content=query)],
     }
     # The invoke method will return the final state of the graph
-    final_state = app_graph.invoke(initial_state)
+    final_state = app_graph.invoke(initial_state, config={"callbacks": [langfuse_callback]})
     return final_state
