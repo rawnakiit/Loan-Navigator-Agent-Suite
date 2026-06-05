@@ -6,6 +6,8 @@ from app.utils.vector_store import get_vector_store
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from app.utils.monitoring import record_agent_invocation, record_fallback_event
+
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,7 @@ def policy_agent_node(state: AgentState) -> dict:
     """
     Agent responsible for answering policy-related queries using the PDF Corpus.
     """
+    record_agent_invocation("policy_agent") # Metric call
     logger.info("Policy Agent: Processing query...")
     query = state["messages"][-1].content
 
@@ -25,6 +28,7 @@ def policy_agent_node(state: AgentState) -> dict:
         docs = retriever.invoke(query)
 
         if not docs:
+            record_fallback_event("policy_agent") # Metric call for fallback
             return {
                 "policy_result": "I couldn't find specific rules regarding this in the policy manuals. Could you clarify your question?",
                 "current_agent": "synthesize_response"
@@ -70,6 +74,8 @@ def policy_agent_node(state: AgentState) -> dict:
         return {"policy_result": answer, "current_agent": "synthesize_response"}
 
     except Exception as e:
+        record_fallback_event("policy_agent", "system_error") # <-- METRIC: Error Fallback
+
         logger.error(f"Error in Policy Agent: {e}")
         return {
             "policy_result": "I am having trouble accessing the policy database right now.",

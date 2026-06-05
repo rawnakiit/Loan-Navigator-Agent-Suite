@@ -9,6 +9,7 @@ from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from app.utils.monitoring import record_agent_invocation, record_fallback_event
 from langfuse.langchain import CallbackHandler
 import os
 
@@ -31,6 +32,8 @@ def supervisor_node(state: AgentState):
     This node uses an LLM to classify the user's intent and decide which agent to call next.
     """
     logger.info("Supervisor: Analyzing intent...")
+    record_agent_invocation("supervisor") # <-- METRIC: Supervisor Invoked
+
     query = state["messages"][-1].content
     llm = get_llm()
 
@@ -58,6 +61,7 @@ def supervisor_node(state: AgentState):
     logger.info(f"Supervisor: Routing to '{route.destination}'")
 
     if route.destination == "end_conversation":
+        record_fallback_event("supervisor", "unknown_intent") # <-- METRIC: Supervisor Fallback
         return {"current_agent": "synthesize_response"}
     else:
         return {"current_agent": route.destination}
@@ -71,6 +75,7 @@ def synthesize_response_node(state: AgentState):
     This node uses an LLM to create a single, coherent, and helpful answer.
     """
     logger.info("Synthesizer: Compiling final response...")
+    record_agent_invocation("synthesizer") # <-- METRIC: Supervisor Invoked
     query = state["messages"][-1].content
 
     # Collect all the results from the agent states
@@ -84,16 +89,27 @@ def synthesize_response_node(state: AgentState):
 
     # If no tools were called, provide a generic response
     if not context:
+        record_fallback_event("synthesizer", "no_agent_data") # <-- METRIC: Supervisor Fallback
         final_resp = "I'm here to help with your loan questions. Feel free to ask about your balance, our policies, or to run a prepayment simulation."
         return {"final_response": final_resp}
 
     # Use an LLM to synthesize a natural language response
-    system_prompt = """You are a helpful and friendly AI assistant for BlueLoans4all.
+    # system_prompt = """You are a helpful and friendly AI assistant for BlueLoans4all.
+    # Your task is to create a single, clear, and concise response for the user based on the information gathered by our internal tools.
+    # Combine the information from the different sources into a single, easy-to-understand answer.
+
+    # - Address the user's original question directly.
+    # - Do not just list the raw data. Explain what it means.
+    # - Maintain a professional and helpful tone.
+    # - Do not mention the internal tools or agent names (e.g., "The SQL agent found..."). Just present the final answer.
+    # """
+    system_prompt = """You are a helpful and friendly AI assistant for BlueLoans4all, an Indian financial company.
     Your task is to create a single, clear, and concise response for the user based on the information gathered by our internal tools.
     Combine the information from the different sources into a single, easy-to-understand answer.
-
+    
     - Address the user's original question directly.
-    - Do not just list the raw data. Explain what it means.
+    - **Crucially, when mentioning any monetary values (like loan balances, EMIs, or amounts), you MUST use the Indian Rupee symbol (₹).**
+    - Do not just list the raw data. Explain what it means in a helpful way.
     - Maintain a professional and helpful tone.
     - Do not mention the internal tools or agent names (e.g., "The SQL agent found..."). Just present the final answer.
     """

@@ -1,0 +1,11 @@
+app/.env
+app1/
+"GCP Capstone -1 Loan Navigator Agent Suite/"
+Capstone-1++Loan+Navigator+Agent+Suite.zip
+.venv/
+.gcloudignore
+**/__pycache__/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

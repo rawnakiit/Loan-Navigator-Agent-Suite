@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 # Modern, standard Pydantic import
 from pydantic import BaseModel, Field
+from app.utils.monitoring import record_agent_invocation, record_fallback_event
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ def calculator_agent_node(state: AgentState) -> dict:
     Extracts numerical parameters from the query and runs Python calculation logic.
     """
     logger.info("Calculator Agent: Processing query...")
+    record_agent_invocation("calculator_agent") # <-- METRIC: Invocation recorded
     
     query = state["messages"][-1].content
     
@@ -76,6 +78,7 @@ def calculator_agent_node(state: AgentState) -> dict:
         return {"calc_result": final_response, "current_agent": "synthesize_response"}
 
     except Exception as e:
+        record_fallback_event("calculator_agent", "parsing_error") # <-- METRIC: Error Fallback
         logger.error(f"Error in Calculator Agent: {e}")
         error_msg = "Sorry, I couldn't perform the calculation. Please ensure you provide the loan amount, interest rate, and prepayment amount clearly."
         return {"calc_result": error_msg, "current_agent": "synthesize_response"}

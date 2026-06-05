@@ -1,6 +1,29 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv, find_dotenv
+import logging
+
+# ====================================================================
+# GOOGLE CLOUD OPERATIONS SUITE (LOGGING & MONITORING) INTEGRATION
+# ====================================================================
+
+try:
+    import google.cloud.logging
+    from google.cloud.logging.handlers import CloudLoggingHandler
+    
+    # 1. Initialize the Google Cloud Logging Client
+    log_client = google.cloud.logging.Client()
+    cloud_handler = CloudLoggingHandler(log_client)
+    
+    # 2. Configure the root logger to send log outputs to BOTH the local terminal and GCP
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+    logging.getLogger().addHandler(cloud_handler)
+
+    logging.info("System Boot: Successfully attached Google Cloud Logging!")
+except Exception as e:
+    # Fallback to standard logging if running locally without GCP credentials
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    logging.warning(f"Running with standard local logging. GCP logger not attached: {e}")
 
 # --- CRITICAL: Load environment variables at the very top ---
 # This ensures all API keys and configurations are available to the agents.
