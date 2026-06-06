@@ -55,24 +55,70 @@ def calculator_agent_node(state: AgentState) -> dict:
         logger.info("Extracting parameters from query...")
         params = extraction_chain.invoke({"question": query})
         
+        principal = params.get("principal", 0.0)
+        prepayment_amount = params.get("prepayment_amount", 0.0)
+        interest_rate = params.get("interest_rate", 0.0)
+        tenure_months = params.get("tenure_months", 0)
+
+        # Perform explicit input validation to catch errors
+        if principal <= 0 or interest_rate <= 0 or tenure_months <= 0 or prepayment_amount <= 0:
+            err_msg = "The loan balance, interest rate, tenure, and prepayment amount must all be positive values greater than zero."
+            logger.warning(f"Calculator Agent Validation Error: {err_msg}")
+            return {
+                "calc_result": f"Validation Error: {err_msg}",
+                "current_agent": "clarification_node",
+                "clarification_needed": True
+            }
+
+        if prepayment_amount > principal:
+            err_msg = f"The prepayment amount (₹{prepayment_amount}) cannot exceed your outstanding principal balance (₹{principal})."
+            logger.warning(f"Calculator Agent Validation Error: {err_msg}")
+            return {
+                "calc_result": f"Validation Error: {err_msg}",
+                "current_agent": "clarification_node",
+                "clarification_needed": True
+            }
+
         # 2. Run the actual Python calculation logic
         logger.info(f"Running simulation with params: {params}")
         sim_result = calculate_prepayment_impact(
-            principal=params["principal"],
-            annual_interest_rate=params["interest_rate"],
-            remaining_tenure_months=params["tenure_months"],
-            prepayment_amount=params["prepayment_amount"]
+            principal=principal,
+            annual_interest_rate=interest_rate,
+            remaining_tenure_months=tenure_months,
+            prepayment_amount=prepayment_amount
         )
         
         # 3. Format the result for the synthesizer
         if sim_result["status"] == "Loan Closed":
              final_response = f"Calculation Result: {sim_result['message']}"
         else:
+             def format_schedule_summary(schedule: list) -> str:
+                 if len(schedule) <= 6:
+                     lines = [f"Month {s['month']}: Payment ₹{s['payment']}, Interest ₹{s['interest_paid']}, Principal Paid ₹{s['principal_paid']}, Remaining Balance ₹{s['remaining_balance']}" for s in schedule]
+                     return "\n".join(lines)
+                 else:
+                     first_3 = schedule[:3]
+                     last_3 = schedule[-3:]
+                     lines = [f"Month {s['month']}: Payment ₹{s['payment']}, Interest ₹{s['interest_paid']}, Principal Paid ₹{s['principal_paid']}, Remaining Balance ₹{s['remaining_balance']}" for s in first_3]
+                     lines.append("...")
+                     for s in last_3:
+                         lines.append(f"Month {s['month']}: Payment ₹{s['payment']}, Interest ₹{s['interest_paid']}, Principal Paid ₹{s['principal_paid']}, Remaining Balance ₹{s['remaining_balance']}")
+                     return "\n".join(lines)
+
              final_response = (
-                 f"Calculation Result: By prepaying ₹{params['prepayment_amount']}, your new principal becomes ₹{sim_result['new_principal']}. "
-                 f"You have two options:\n"
-                 f"1. Reduce your EMI: Your new EMI will be ₹{sim_result['option_a_new_emi']} (Original was ₹{sim_result['original_emi']}).\n"
-                 f"2. Reduce your tenure: Keep your EMI same, and your loan will end {sim_result['option_b_months_saved']} months earlier."
+                 f"Calculation Result:\n"
+                 f"By making a prepayment of ₹{params['prepayment_amount']}, your new outstanding principal becomes ₹{sim_result['new_principal']}.\n"
+                 f"Original Total Repayment: ₹{sim_result['original_total_repayment']}\n\n"
+                 f"Option A: Reduce EMI (Keep original tenure of {tenure_months} months):\n"
+                 f"- New Monthly EMI: ₹{sim_result['option_a_new_emi']} (Original was ₹{sim_result['original_emi']})\n"
+                 f"- Total Repayment Amount: ₹{sim_result['option_a_total_repayment']}\n"
+                 f"- Total Interest Saved: ₹{sim_result['option_a_interest_saved']}\n"
+                 f"- Amortization Schedule Summary:\n{format_schedule_summary(sim_result['option_a_schedule'])}\n\n"
+                 f"Option B: Reduce Tenure (Keep original EMI of ₹{sim_result['original_emi']}):\n"
+                 f"- New Loan Tenure: {sim_result['option_b_new_tenure_months']} months (Reduced by {sim_result['option_b_months_saved']} months)\n"
+                 f"- Total Repayment Amount: ₹{sim_result['option_b_total_repayment']}\n"
+                 f"- Total Interest Saved: ₹{sim_result['option_b_interest_saved']}\n"
+                 f"- Amortization Schedule Summary:\n{format_schedule_summary(sim_result['option_b_schedule'])}"
              )
         
         return {"calc_result": final_response, "current_agent": "synthesize_response"}
@@ -80,5 +126,9 @@ def calculator_agent_node(state: AgentState) -> dict:
     except Exception as e:
         record_fallback_event("calculator_agent", "parsing_error") # <-- METRIC: Error Fallback
         logger.error(f"Error in Calculator Agent: {e}")
-        error_msg = "Sorry, I couldn't perform the calculation. Please ensure you provide the loan amount, interest rate, and prepayment amount clearly."
-        return {"calc_result": error_msg, "current_agent": "synthesize_response"}
+        error_msg = f"Calculation failed: {str(e)}"
+        return {
+            "calc_result": f"Validation Error: {error_msg}",
+            "current_agent": "clarification_node",
+            "clarification_needed": True
+        }

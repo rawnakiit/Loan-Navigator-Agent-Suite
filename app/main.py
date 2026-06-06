@@ -54,9 +54,13 @@ async def process_query(request: QueryRequest):
         # Pass the query to the LangGraph supervisor
         result = run_supervisor(request.query)
         
+        status = "success"
+        if result.get("clarification_needed"):
+            status = "clarification_needed"
+
         return QueryResponse(
             response=result.get("final_response", "Sorry, I couldn't process that."),
-            status="success"
+            status=status
         )
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")

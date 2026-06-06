@@ -15,3 +15,5 @@ class AgentState(TypedDict):
     calc_result: str
     final_response: str
     current_agent: str
+    policy_retries: int
+    clarification_needed: bool

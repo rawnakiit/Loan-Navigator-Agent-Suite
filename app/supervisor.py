@@ -24,6 +24,10 @@ class RouteQuery(BaseModel):
     destination: Literal["sql_agent", "policy_agent", "calculator_agent", "end_conversation"] = Field(
         description="Given the user query, pick the best tool/agent to handle it."
     )
+    rewritten_query: str | None = Field(
+        default=None,
+        description="If routing to 'policy_agent' and previous attempts failed, provide a rewritten, broader query to search the vector database. Otherwise, leave null."
+    )
 
 
 def supervisor_node(state: AgentState):
@@ -34,20 +38,40 @@ def supervisor_node(state: AgentState):
     logger.info("Supervisor: Analyzing intent...")
     record_agent_invocation("supervisor") # <-- METRIC: Supervisor Invoked
 
+    retries = state.get("policy_retries", 0)
+    if retries >= 2:
+        logger.warning(f"Supervisor: Max retries ({retries}) reached for policy lookup. Routing to clarification_node.")
+        return {"current_agent": "clarification_node", "clarification_needed": True}
+
     query = state["messages"][-1].content
     llm = get_llm()
 
     # Create a structured output chain to force the LLM to choose a destination
     structured_llm = llm.with_structured_output(RouteQuery)
 
-    # Prompt the LLM to route the query
-    system_prompt = """You are an expert routing assistant for a loan processing system. Your job is to determine the best agent to handle a user's query.
-    The available agents are:
-    - 'sql_agent': Use for questions about specific loan details like "what is my balance?", "show my EMI amount", or any query that requires fetching exact data for a specific loan from a database.
-    - 'policy_agent': Use for general questions about company rules, prepayment policies, top-up eligibility criteria, or regulatory guidelines.
-    - 'calculator_agent': Use for "what-if" scenarios, such as "what happens if I prepay 50,000?", or any query that requires mathematical calculation.
-    - 'end_conversation': Use for simple greetings, thank yous, or any query that does not require using a tool.
-    """
+    # If this is a retry, build a prompt that alerts the LLM to rewrite the query
+    if retries > 0:
+        original_query = ""
+        for msg in reversed(state["messages"]):
+            if msg.type == "human":
+                original_query = msg.content
+                break
+        system_prompt = f"""You are an expert routing assistant for a loan processing system.
+        The user's original query was: "{original_query}".
+        A previous attempt to retrieve policy documents failed because no high-confidence records were found.
+        Your job is to either:
+        1. Route back to 'policy_agent' and provide a rewritten, broader query in 'rewritten_query' to search the policy database.
+        2. Route to 'end_conversation' if you need to ask the user for clarification.
+        """
+    else:
+        # Prompt the LLM to route the query
+        system_prompt = """You are an expert routing assistant for a loan processing system. Your job is to determine the best agent to handle a user's query.
+        The available agents are:
+        - 'sql_agent': Use for questions about specific loan details like "what is my balance?", "show my EMI amount", or any query that requires fetching exact data for a specific loan from a database.
+        - 'policy_agent': Use for general questions about company rules, prepayment policies, top-up eligibility criteria, or regulatory guidelines.
+        - 'calculator_agent': Use for "what-if" scenarios, such as "what happens if I prepay 50,000?", or any query that requires mathematical calculation.
+        - 'end_conversation': Use for simple greetings, thank yous, or any query that does not require using a tool.
+        """
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
@@ -63,6 +87,12 @@ def supervisor_node(state: AgentState):
     if route.destination == "end_conversation":
         record_fallback_event("supervisor", "unknown_intent") # <-- METRIC: Supervisor Fallback
         return {"current_agent": "synthesize_response"}
+    elif route.destination == "policy_agent" and route.rewritten_query:
+        logger.info(f"Supervisor: Rewriting policy query to: '{route.rewritten_query}'")
+        return {
+            "current_agent": "policy_agent",
+            "messages": [HumanMessage(content=route.rewritten_query)]
+        }
     else:
         return {"current_agent": route.destination}
 
@@ -130,6 +160,49 @@ def synthesize_response_node(state: AgentState):
     return {"final_response": final_resp}
 
 
+def clarification_node(state: AgentState):
+    """
+    Triggered when database/policy lookup fails or max retries are reached.
+    Conversational agent requesting clarification.
+    """
+    logger.info("Clarification Node: Formulating clarification request...")
+    query = state["messages"][-1].content
+    
+    # Try to determine context of failure
+    failure_context = ""
+    calc_res = state.get("calc_result", "")
+    if state.get("policy_result") == "I couldn't find specific rules regarding this in the policy manuals.":
+        failure_context = "policy manuals search returned no relevant matches"
+    elif state.get("sql_result") == "No data found" or not state.get("sql_result"):
+        failure_context = "loan database queries did not match any specific customer records"
+    elif calc_res.startswith("Validation Error:"):
+        failure_context = f"the loan prepayment calculator simulation failed because of validation rules: {calc_res.replace('Validation Error:', '').strip()}"
+
+    system_prompt = f"""You are a customer support agent for BlueLoans4all.
+    Our automated backend failed to find specific results for the user's query: "{query}".
+    Reason/Context: {failure_context or 'No specific records or manuals match the query.'}
+    
+    Write a brief, polite, and professional response asking the user to clarify or expand their query
+    (e.g., providing their loan account number, being more specific with terms, or entering valid loan/prepayment amounts) so we can help them.
+    Do not use developer jargon or name internal agents. Keep it customer-friendly and warm.
+    """
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("human", "{query}")
+    ])
+    
+    llm = get_llm()
+    chain = prompt | llm | StrOutputParser()
+    resp = chain.invoke({"query": query})
+    
+    return {
+        "final_response": resp,
+        "clarification_needed": True,
+        "current_agent": END
+    }
+
+
 # --- 3. GRAPH DEFINITION AND WIRING ---
 
 # The router function remains the same
@@ -147,6 +220,7 @@ workflow.add_node("sql_agent", sql_agent_node)
 workflow.add_node("policy_agent", policy_agent_node)
 workflow.add_node("calculator_agent", calculator_agent_node)
 workflow.add_node("synthesize_response", synthesize_response_node)
+workflow.add_node("clarification_node", clarification_node)
 
 # Add edges
 workflow.set_entry_point("supervisor")
@@ -159,17 +233,40 @@ workflow.add_conditional_edges(
         "sql_agent": "sql_agent",
         "policy_agent": "policy_agent",
         "calculator_agent": "calculator_agent",
+        "clarification_node": "clarification_node",
         "synthesize_response": "synthesize_response"  # For when no tool is needed
     }
 )
 
 # All specialized agents route back to the synthesizer
 workflow.add_edge("sql_agent", "synthesize_response")
-workflow.add_edge("policy_agent", "synthesize_response")
-workflow.add_edge("calculator_agent", "synthesize_response")
+
+# Policy agent routes conditionally back to supervisor or to synthesize_response
+workflow.add_conditional_edges(
+    "policy_agent",
+    router,
+    {
+        "supervisor": "supervisor",
+        "clarification_node": "clarification_node",
+        "synthesize_response": "synthesize_response"
+    }
+)
+
+# Calculator agent routes conditionally to clarification_node or synthesize_response
+workflow.add_conditional_edges(
+    "calculator_agent",
+    router,
+    {
+        "clarification_node": "clarification_node",
+        "synthesize_response": "synthesize_response"
+    }
+)
 
 # The synthesizer marks the end of the process
 workflow.add_edge("synthesize_response", END)
+
+# The clarification node marks the end of the process
+workflow.add_edge("clarification_node", END)
 
 # Compile the graph
 app_graph = workflow.compile()

@@ -23,15 +23,37 @@ def policy_agent_node(state: AgentState) -> dict:
     try:
         vector_store = get_vector_store()
 
-        # Retrieve the top 4 chunks based on our new strategy
-        retriever = vector_store.as_retriever(search_kwargs={"k": 4})
-        docs = retriever.invoke(query)
+        # Retrieve the top 4 chunks with similarity scores
+        results = vector_store.similarity_search_with_score(query, k=4)
+        
+        # Filter out retrieved documents where the similarity score does not meet a predefined threshold.
+        # Note: ChromaDB returns distance by default (lower is better). 
+        # A distance <= 0.75 is considered a match.
+        threshold = 0.75
+        docs = [doc for doc, score in results if score <= threshold]
 
         if not docs:
             record_fallback_event("policy_agent") # Metric call for fallback
+            retries = state.get("policy_retries", 0) + 1
+            from langchain_core.messages import SystemMessage
+            system_note = (
+                f"System Note: No policy documents matched the query with high confidence. "
+                f"This is retry #{retries}. Please rewrite the query or ask the user for clarification."
+            )
+            if retries >= 2:
+                return {
+                    "messages": [SystemMessage(content=system_note)],
+                    "policy_retries": retries,
+                    "current_agent": "clarification_node",
+                    "clarification_needed": True,
+                    "policy_result": "I couldn't find specific rules regarding this in the policy manuals."
+                }
             return {
-                "policy_result": "I couldn't find specific rules regarding this in the policy manuals. Could you clarify your question?",
-                "current_agent": "synthesize_response"
+                "messages": [SystemMessage(content=system_note)],
+                "policy_retries": retries,
+                "current_agent": "supervisor",
+                "clarification_needed": False,
+                "policy_result": "I couldn't find specific rules regarding this in the policy manuals."
             }
 
         # Format the retrieved chunks and include the PDF Source Name

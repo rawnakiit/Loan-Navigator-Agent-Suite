@@ -2,8 +2,7 @@ import os
 import logging
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-# Use the modern, recommended Google GenAI embeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_google_vertexai import VertexAIEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv, find_dotenv
 
@@ -51,13 +50,16 @@ def main():
     chunks = text_splitter.split_documents(documents)
     logger.info(f"Split documents into {len(chunks)} text chunks.")
 
-    # 3. Initialize Embeddings (Using the new, stable library)
+    # 3. Initialize Embeddings (Using Vertex AI)
     try:
-        # This uses the latest "models/text-embedding-004"
-        embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+        embeddings = VertexAIEmbeddings(
+            model_name=os.getenv("EMBEDDING_MODEL", "text-embedding-004"),
+            project=gcp_project,
+            location=os.getenv("GCP_LOCATION", "us-central1")
+        )
                                                    
     except Exception as e:
-        logger.error(f"❌ Failed to initialize Google GenAI Embeddings: {e}")
+        logger.error(f"❌ Failed to initialize Vertex AI Embeddings: {e}")
         return
 
     # 4. Save to ChromaDB
@@ -79,4 +81,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
