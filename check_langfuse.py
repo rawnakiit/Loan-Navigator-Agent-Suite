@@ -32,8 +32,6 @@ try:
     llm = get_llm()
     llm.invoke("Hello, this is a connectivity check.", config={"callbacks": [handler], "run_name": "Diagnostics-Connection-Test"})
     
-    print("Forcing telemetry queue flush...")
-    handler.flush()
     print("\n🎉 SUCCESS! The trace was successfully sent. Verify 'Diagnostics-Connection-Test' is visible in your Langfuse dashboard.")
     
 except Exception as e:
