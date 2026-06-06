@@ -33,6 +33,7 @@ def sql_agent_node(state: AgentState) -> dict:
         - To calculate 'outstanding balance', use the formula: (loan_amount - amount_paid).
         - If a user provides a loan ID like 'LN2003', use only the integer part (2003) in the WHERE clause.
         - Output ONLY the raw SQL query. Do not add explanations, markdown, or the word 'SQLite'.
+        - Crucially, if the user query does NOT provide a specific loan ID (e.g. LN2003) or customer ID (e.g. 101), do NOT generate any SQL query. Instead, output exactly: MISSING_IDENTIFIER
         """
         
         prompt = ChatPromptTemplate.from_messages([
@@ -45,6 +46,15 @@ def sql_agent_node(state: AgentState) -> dict:
         generated_sql = sql_chain.invoke({"question": question})
         cleaned_sql = generated_sql.strip().replace("```sql", "").replace("```", "").strip()
         
+        if "MISSING_IDENTIFIER" in cleaned_sql:
+            record_fallback_event("sql_agent", "missing_identifier")
+            logger.warning("SQL Agent: No specific loan or customer identifier provided in query.")
+            return {
+                "sql_result": "No data found",
+                "current_agent": "clarification_node",
+                "clarification_needed": True
+            }
+
         logger.info(f"SQL Agent: Executing SQL: '{cleaned_sql}'")
         result = db.run(cleaned_sql)
         logger.info(f"SQL Agent: Raw query result: '{result}'")
@@ -66,4 +76,3 @@ def sql_agent_node(state: AgentState) -> dict:
             "sql_result": "Sorry, I encountered a system error querying the database.",
             "current_agent": "synthesize_response"
         }
-

@@ -112,3 +112,36 @@ def test_sql_agent_node_exception(mock_record_fallback, mock_record, mock_get_ll
     assert result["current_agent"] == "synthesize_response"
     assert "Sorry, I encountered a system error" in result["sql_result"]
     mock_record_fallback.assert_called_once_with("sql_agent", "system_error")
+
+
+@patch("app.agents.sql_agent.get_llm")
+@patch("app.agents.sql_agent.get_sql_database_tool")
+@patch("app.agents.sql_agent.record_agent_invocation")
+@patch("app.agents.sql_agent.record_fallback_event")
+def test_sql_agent_node_missing_identifier(mock_record_fallback, mock_record, mock_get_db, mock_get_llm):
+    """
+    Test that if no specific identifier is provided, the SQL Agent detects
+    the 'MISSING_IDENTIFIER' token and routes to the clarification node.
+    """
+    mock_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.invoke.return_value = AIMessage(content="MISSING_IDENTIFIER")
+    mock_llm.return_value = AIMessage(content="MISSING_IDENTIFIER")
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="Show me all loan details")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "sql_agent",
+        "policy_retries": 0,
+        "clarification_needed": False,
+    }
+
+    result = sql_agent_node(state)
+    assert result["current_agent"] == "clarification_node"
+    assert result["clarification_needed"] is True
+    assert result["sql_result"] == "No data found"
+    mock_record_fallback.assert_called_once_with("sql_agent", "missing_identifier")

@@ -238,8 +238,15 @@ workflow.add_conditional_edges(
     }
 )
 
-# All specialized agents route back to the synthesizer
-workflow.add_edge("sql_agent", "synthesize_response")
+# SQL agent routes conditionally to clarification_node or synthesize_response
+workflow.add_conditional_edges(
+    "sql_agent",
+    router,
+    {
+        "clarification_node": "clarification_node",
+        "synthesize_response": "synthesize_response"
+    }
+)
 
 # Policy agent routes conditionally back to supervisor or to synthesize_response
 workflow.add_conditional_edges(
