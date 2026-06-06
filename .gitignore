@@ -9,3 +9,6 @@ Capstone-1++Loan+Navigator+Agent+Suite.zip
 Thumbs.db
 .vscode/
 .idea/
+__pycache__/
+*.py[cod]
+*$py.class
