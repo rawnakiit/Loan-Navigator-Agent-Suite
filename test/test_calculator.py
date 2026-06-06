@@ -136,7 +136,7 @@ def test_calculator_agent_node_successful_extraction(mock_record, mock_get_llm):
     assert result["current_agent"] == "synthesize_response"
     assert "Calculation Result:" in result["calc_result"]
     assert "₹10000" in result["calc_result"]
-    mock_llm.invoke.assert_called_once()
+    mock_llm.assert_called_once()
 
 
 @patch("app.agents.calculator_agent.get_llm")

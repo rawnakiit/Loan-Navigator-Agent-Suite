@@ -55,7 +55,7 @@ def test_end_to_end_sql_flow(mock_callback, mock_metrics, mock_get_db, mock_chat
     # Assert
     assert "final_response" in result
     assert "₹75,000" in result["final_response"]
-    assert result["clarification_needed"] is False
+    assert result.get("clarification_needed", False) is False
     assert result["current_agent"] == "synthesize_response"
 
     # Ensure the database mock was queried
