@@ -213,3 +213,69 @@ def test_calculator_agent_node_malformed_json_fallback(mock_record_fallback, moc
     assert result["clarification_needed"] is True
     assert "Validation Error: Calculation failed" in result["calc_result"]
     mock_record_fallback.assert_called_once_with("calculator_agent", "parsing_error")
+
+
+@patch("app.agents.calculator_agent.get_llm")
+@patch("app.agents.calculator_agent.record_agent_invocation")
+def test_calculator_agent_node_non_positive_validation(mock_record, mock_get_llm):
+    """
+    Test that when any extracted value is non-positive, validation catches it
+    and routes to clarification_node.
+    """
+    mock_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.invoke.return_value = AIMessage(
+        content='{"principal": 0.0, "interest_rate": 10.0, "tenure_months": 12, "prepayment_amount": 5000.0}'
+    )
+    mock_llm.return_value = AIMessage(
+        content='{"principal": 0.0, "interest_rate": 10.0, "tenure_months": 12, "prepayment_amount": 5000.0}'
+    )
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="Prepay on 0 loan")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "calculator_agent",
+        "policy_retries": 0,
+        "clarification_needed": False,
+    }
+
+    result = calculator_agent_node(state)
+    assert result["current_agent"] == "clarification_node"
+    assert result["clarification_needed"] is True
+    assert "must all be positive values" in result["calc_result"]
+
+
+@patch("app.agents.calculator_agent.get_llm")
+@patch("app.agents.calculator_agent.record_agent_invocation")
+def test_calculator_agent_node_loan_closed_path(mock_record, mock_get_llm):
+    """
+    Test that when the prepayment covers the outstanding balance, the agent returns the loan closed message.
+    """
+    mock_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.invoke.return_value = AIMessage(
+        content='{"principal": 10000.0, "interest_rate": 10.0, "tenure_months": 12, "prepayment_amount": 10000.0}'
+    )
+    mock_llm.return_value = AIMessage(
+        content='{"principal": 10000.0, "interest_rate": 10.0, "tenure_months": 12, "prepayment_amount": 10000.0}'
+    )
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="Prepay 10,000 on a 10,000 loan")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "calculator_agent",
+        "policy_retries": 0,
+        "clarification_needed": False,
+    }
+
+    result = calculator_agent_node(state)
+    assert result["current_agent"] == "synthesize_response"
+    assert "Calculation Result: The prepayment amount covers the entire outstanding balance" in result["calc_result"]

@@ -82,3 +82,33 @@ def test_sql_agent_node_empty_db_result_fallback(mock_record_fallback, mock_reco
     assert result["current_agent"] == "synthesize_response"
     assert "I couldn't find any specific information" in result["sql_result"]
     mock_record_fallback.assert_called_once_with("sql_agent", "no_db_results")
+
+
+@patch("app.agents.sql_agent.get_llm")
+@patch("app.agents.sql_agent.record_agent_invocation")
+@patch("app.agents.sql_agent.record_fallback_event")
+def test_sql_agent_node_exception(mock_record_fallback, mock_record, mock_get_llm):
+    """
+    Test that if an exception is raised inside the SQL agent, it is handled cleanly
+    and returns a system error message.
+    """
+    mock_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.invoke.side_effect = Exception("Vertex connection failed")
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="Query loan details LN2003")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "sql_agent",
+        "policy_retries": 0,
+        "clarification_needed": False,
+    }
+
+    result = sql_agent_node(state)
+    assert result["current_agent"] == "synthesize_response"
+    assert "Sorry, I encountered a system error" in result["sql_result"]
+    mock_record_fallback.assert_called_once_with("sql_agent", "system_error")

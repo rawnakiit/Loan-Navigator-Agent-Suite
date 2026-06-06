@@ -1,7 +1,8 @@
 import pytest
+import os
 from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage, HumanMessage
-from app.supervisor import app_graph, RouteQuery
+from app.supervisor import app_graph, RouteQuery, run_supervisor
 
 @patch("app.utils.llm.ChatGoogleGenerativeAI")
 @patch("app.agents.sql_agent.get_sql_database_tool")
@@ -62,3 +63,40 @@ def test_end_to_end_sql_flow(mock_callback, mock_metrics, mock_get_db, mock_chat
     mock_db.run.assert_called_once_with("SELECT loan_amount FROM loan_data WHERE customer_id = 101;")
     # Ensure both stages executed metrics
     assert mock_metrics.call_count >= 2
+
+
+@patch("app.supervisor.app_graph")
+@patch("app.supervisor.CallbackHandler")
+@patch.dict(os.environ, {
+    "LANGFUSE_PUBLIC_KEY": "pk-lf-test",
+    "LANGFUSE_SECRET_KEY": "sk-lf-test",
+    "LANGFUSE_HOST": "https://test.langfuse.com"
+})
+def test_run_supervisor(mock_callback_class, mock_graph):
+    """
+    Test that run_supervisor builds the correct Langfuse CallbackHandler and
+    invokes the graph.
+    """
+    mock_callback_instance = MagicMock()
+    mock_callback_class.return_value = mock_callback_instance
+    
+    mock_graph.invoke.return_value = {
+        "final_response": "Test finalized response",
+        "clarification_needed": False
+    }
+    
+    res = run_supervisor("This is a query", user_id="user-999")
+    
+    mock_callback_class.assert_called_once_with(
+        public_key="pk-lf-test",
+        secret_key="sk-lf-test",
+        host="https://test.langfuse.com",
+        trace_name="LoanNavigator-Trace",
+        user_id="user-999",
+        metadata={"query_source": "streamlit-ui"}
+    )
+    mock_graph.invoke.assert_called_once_with(
+        {"messages": [HumanMessage(content="This is a query")]},
+        config={"callbacks": [mock_callback_instance]}
+    )
+    assert res["final_response"] == "Test finalized response"
