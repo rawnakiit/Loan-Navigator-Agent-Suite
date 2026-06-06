@@ -96,6 +96,10 @@ def test_supervisor_rewrites_query_for_policy_retry(mock_get_llm):
         destination="policy_agent",
         rewritten_query="BlueLoans4all rules and options for paying loans off early"
     )
+    mock_structured_llm.return_value = RouteQuery(
+        destination="policy_agent",
+        rewritten_query="BlueLoans4all rules and options for paying loans off early"
+    )
 
     initial_state: AgentState = {
         "messages": [

@@ -55,7 +55,7 @@ def test_calculate_prepayment_impact_success():
 
     # Option A Assertions (Reduce EMI, Keep Tenure)
     assert result["option_a_new_emi"] < result["original_emi"]
-    assert result["option_a_new_emi"] == 5775.18  # calculate_emi(65000, 12, 12)
+    assert result["option_a_new_emi"] == 5775.17  # calculate_emi(65000, 12, 12)
     assert len(result["option_a_schedule"]) == remaining_tenure
     assert result["option_a_interest_saved"] > 0
     # Last month of schedule must have a zero remaining balance
@@ -113,6 +113,9 @@ def test_calculator_agent_node_successful_extraction(mock_record, mock_get_llm):
     mock_llm.invoke.return_value = AIMessage(
         content='{"principal": 75000.0, "interest_rate": 12.0, "tenure_months": 12, "prepayment_amount": 10000.0}'
     )
+    mock_llm.return_value = AIMessage(
+        content='{"principal": 75000.0, "interest_rate": 12.0, "tenure_months": 12, "prepayment_amount": 10000.0}'
+    )
     
     state: AgentState = {
         "messages": [HumanMessage(content="Prepay 10,000 on 75,000 at 12% for 12 months")],
@@ -151,6 +154,9 @@ def test_calculator_agent_node_prepayment_exceeds_principal(mock_record, mock_ge
     mock_llm.invoke.return_value = AIMessage(
         content='{"principal": 50000.0, "interest_rate": 10.0, "tenure_months": 12, "prepayment_amount": 60000.0}'
     )
+    mock_llm.return_value = AIMessage(
+        content='{"principal": 50000.0, "interest_rate": 10.0, "tenure_months": 12, "prepayment_amount": 60000.0}'
+    )
     
     state: AgentState = {
         "messages": [HumanMessage(content="Prepay 60,000 on 50,000 loan")],
@@ -185,6 +191,7 @@ def test_calculator_agent_node_malformed_json_fallback(mock_record_fallback, moc
     mock_llm = MagicMock()
     mock_get_llm.return_value = mock_llm
     mock_llm.invoke.return_value = AIMessage(content="Sorry, I cannot help with that.")
+    mock_llm.return_value = AIMessage(content="Sorry, I cannot help with that.")
     
     state: AgentState = {
         "messages": [HumanMessage(content="Prepayment calculations")],

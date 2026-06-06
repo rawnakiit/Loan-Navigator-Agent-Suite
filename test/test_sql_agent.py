@@ -16,6 +16,7 @@ def test_sql_agent_node_success(mock_record, mock_get_db, mock_get_llm):
     mock_llm = MagicMock()
     mock_get_llm.return_value = mock_llm
     mock_llm.invoke.return_value = AIMessage(content="SELECT loan_amount FROM loan_data WHERE loan_id = 2003;")
+    mock_llm.return_value = AIMessage(content="SELECT loan_amount FROM loan_data WHERE loan_id = 2003;")
 
     mock_db = MagicMock()
     mock_get_db.return_value = mock_db
@@ -55,6 +56,7 @@ def test_sql_agent_node_empty_db_result_fallback(mock_record_fallback, mock_reco
     mock_llm = MagicMock()
     mock_get_llm.return_value = mock_llm
     mock_llm.invoke.return_value = AIMessage(content="SELECT loan_amount FROM loan_data WHERE customer_id = 9999;")
+    mock_llm.return_value = AIMessage(content="SELECT loan_amount FROM loan_data WHERE customer_id = 9999;")
 
     mock_db = MagicMock()
     mock_get_db.return_value = mock_db

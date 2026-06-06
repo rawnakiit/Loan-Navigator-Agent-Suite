@@ -24,15 +24,20 @@ def test_end_to_end_sql_flow(mock_callback, mock_metrics, mock_get_db, mock_chat
         destination="sql_agent",
         rewritten_query=None
     )
+    mock_structured_llm.return_value = RouteQuery(
+        destination="sql_agent",
+        rewritten_query=None
+    )
     mock_llm.with_structured_output.return_value = mock_structured_llm
 
     # Mock sequential invoke returns:
     # 1. First invoke: SQL query writing inside sql_agent_node
     # 2. Second invoke: Synthesis of final natural language in synthesize_response_node
-    mock_llm.invoke.side_effect = [
+    mock_llm.side_effect = [
         AIMessage(content="SELECT loan_amount FROM loan_data WHERE customer_id = 101;"),
         AIMessage(content="Your loan amount with BlueLoans4all is ₹75,000. It is currently active.")
     ]
+    mock_llm.invoke.side_effect = mock_llm.side_effect
 
     # Mock DB execution
     mock_db = MagicMock()
