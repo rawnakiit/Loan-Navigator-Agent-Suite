@@ -1,5 +1,7 @@
 import pytest
 import os
+import sys
+import importlib
 from unittest.mock import patch, MagicMock
 from app.utils.db import get_sql_database_tool
 from app.utils.llm import get_llm
@@ -156,3 +158,26 @@ def test_record_fallback_event(mock_write):
         metric_type="custom.googleapis.com/agent/fallback_count",
         metric_labels={"agent_name": "test_agent", "reason": "timeout"}
     )
+
+
+def test_monitoring_client_init_exception():
+    """
+    Test that app.utils.monitoring imports/loads cleanly and handles client initialization exceptions gracefully.
+    """
+    with patch("google.cloud.monitoring_v3.MetricServiceClient", side_effect=Exception("Client init error")):
+        import app.utils.monitoring
+        importlib.reload(app.utils.monitoring)
+        assert app.utils.monitoring.client is None
+
+
+@patch("app.utils.monitoring.client")
+def test_write_time_series_exception(mock_client):
+    """
+    Test that if client.create_time_series raises an exception, the failure is caught and logged.
+    """
+    mock_client_instance = MagicMock()
+    mock_client_instance.create_time_series.side_effect = Exception("Write API quota exceeded")
+    with patch("app.utils.monitoring.client", mock_client_instance), patch("app.utils.monitoring.PROJECT_ID", "my-project"), patch("app.utils.monitoring.project_name", "projects/my-project"):
+        # This shouldn't raise any exception up to the caller
+        _write_time_series("custom.googleapis.com/test", {"label": "value"})
+        mock_client_instance.create_time_series.assert_called_once()

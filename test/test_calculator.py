@@ -279,3 +279,59 @@ def test_calculator_agent_node_loan_closed_path(mock_record, mock_get_llm):
     result = calculator_agent_node(state)
     assert result["current_agent"] == "synthesize_response"
     assert "Calculation Result: The prepayment amount covers the entire outstanding balance" in result["calc_result"]
+
+
+@patch("app.agents.calculator_agent.get_llm")
+@patch("app.agents.calculator_agent.record_agent_invocation")
+def test_calculator_agent_node_short_tenure(mock_record, mock_get_llm):
+    """
+    Test that a short tenure (<= 6 months) correctly formats the amortization schedule 
+    using the shorter summary format (no ellipses).
+    """
+    mock_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.invoke.return_value = AIMessage(
+        content='{"principal": 5000.0, "interest_rate": 10.0, "tenure_months": 4, "prepayment_amount": 1000.0}'
+    )
+    mock_llm.return_value = AIMessage(
+        content='{"principal": 5000.0, "interest_rate": 10.0, "tenure_months": 4, "prepayment_amount": 1000.0}'
+    )
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="Prepay 1000 on 5000 for 4 months")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "calculator_agent",
+        "policy_retries": 0,
+        "clarification_needed": False,
+    }
+
+    result = calculator_agent_node(state)
+    assert result["current_agent"] == "synthesize_response"
+    assert "Month 1:" in result["calc_result"]
+    assert "..." not in result["calc_result"]  # Ensures the <= 6 formatting branch was hit
+
+
+def test_calculate_emi_zero_interest_rate():
+    """
+    Validates EMI calculation when the interest rate is 0.
+    """
+    emi = calculate_emi(12000.0, 0.0, 12)
+    assert emi == 1000.0
+
+
+def test_calculate_prepayment_impact_early_break():
+    """
+    Validates that Option A amortization loop breaks early when balance becomes zero 
+    due to rounding, covering the early break branch.
+    """
+    result = calculate_prepayment_impact(
+        principal=0.03,
+        annual_interest_rate=12.0,
+        remaining_tenure_months=5,
+        prepayment_amount=0.0
+    )
+    assert result["status"] == "Success"

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from app.state import AgentState
 from app.agents.policy_agent import policy_agent_node
-from app.supervisor import supervisor_node, RouteQuery, clarification_node
+from app.supervisor import supervisor_node, RouteQuery, clarification_node, synthesize_response_node
 
 @patch("app.agents.policy_agent.get_vector_store")
 @patch("app.agents.policy_agent.record_agent_invocation")
@@ -256,3 +256,109 @@ def test_clarification_node_calc_error(mock_get_llm):
     result = clarification_node(state)
     assert result["clarification_needed"] is True
     assert result["final_response"] == "Could you clarify your prepayment amount?"
+
+
+@patch("app.agents.policy_agent.get_vector_store")
+@patch("app.agents.policy_agent.record_agent_invocation")
+@patch("app.agents.policy_agent.record_fallback_event")
+def test_policy_agent_node_exception(mock_record_fallback, mock_record_invocation, mock_get_vector_store):
+    """
+    Test that if an exception is raised inside the policy agent, it is handled cleanly.
+    """
+    mock_get_vector_store.side_effect = Exception("Vector store connection timed out")
+
+    initial_state: AgentState = {
+        "messages": [HumanMessage(content="What are the rules?")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "policy_agent",
+        "policy_retries": 0,
+    }
+
+    result = policy_agent_node(initial_state)
+    assert result["current_agent"] == "synthesize_response"
+    assert "trouble accessing the policy database" in result["policy_result"]
+    mock_record_fallback.assert_called_once_with("policy_agent", "system_error")
+
+
+@patch("app.supervisor.get_llm")
+@patch("app.supervisor.record_fallback_event")
+def test_supervisor_routes_to_end_conversation(mock_record_fallback, mock_get_llm):
+    """
+    Test that if the supervisor decides to route to 'end_conversation', it returns synthesize_response
+    and logs the fallback event.
+    """
+    mock_llm = MagicMock()
+    mock_structured_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.with_structured_output.return_value = mock_structured_llm
+
+    mock_structured_llm.invoke.return_value = RouteQuery(
+        destination="end_conversation",
+        rewritten_query=None
+    )
+    mock_structured_llm.return_value = RouteQuery(
+        destination="end_conversation",
+        rewritten_query=None
+    )
+
+    initial_state: AgentState = {
+        "messages": [HumanMessage(content="Thank you!")],
+        "intent": "",
+        "current_agent": "supervisor",
+        "policy_retries": 0,
+    }
+
+    result = supervisor_node(initial_state)
+    assert result["current_agent"] == "synthesize_response"
+    mock_record_fallback.assert_called_once_with("supervisor", "unknown_intent")
+
+
+def test_synthesize_response_no_context():
+    """
+    Test that if synthesizer is called with no context from other agents,
+    it returns a friendly generic fallback message.
+    """
+    state: AgentState = {
+        "messages": [HumanMessage(content="Hello!")],
+        "intent": "",
+        "sql_result": "",
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "synthesize_response",
+        "policy_retries": 0,
+    }
+    result = synthesize_response_node(state)
+    assert "I'm here to help with your loan questions" in result["final_response"]
+
+
+@patch("app.supervisor.get_llm")
+def test_clarification_node_sql_error(mock_get_llm):
+    """
+    Test that clarification_node creates a correct system prompt and gets LLM response
+    when database lookup returns empty or none.
+    """
+    mock_llm = MagicMock()
+    mock_get_llm.return_value = mock_llm
+    mock_llm.invoke.return_value = AIMessage(content="Could you clarify your account details?")
+    mock_llm.return_value = AIMessage(content="Could you clarify your account details?")
+
+    state: AgentState = {
+        "messages": [HumanMessage(content="Show my active balance")],
+        "intent": "",
+        "sql_result": "",  # Empty result
+        "policy_result": "",
+        "calc_result": "",
+        "final_response": "",
+        "current_agent": "clarification_node",
+        "policy_retries": 0,
+        "clarification_needed": True,
+    }
+
+    result = clarification_node(state)
+    assert result["clarification_needed"] is True
+    assert result["final_response"] == "Could you clarify your account details?"

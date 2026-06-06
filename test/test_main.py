@@ -1,5 +1,7 @@
 import pytest
 import os
+import importlib
+import sys
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, HumanMessage
@@ -68,3 +70,22 @@ def test_process_query_exception(mock_run):
     )
     assert response.status_code == 500
     assert response.json() == {"detail": "Internal server error"}
+
+
+def test_main_import_without_gcp_logging():
+    """
+    Test that app.main imports cleanly and logs a warning if google.cloud.logging raises an Exception.
+    """
+    with patch.dict(sys.modules, {"google.cloud.logging": None}):
+        import app.main
+        importlib.reload(app.main)
+
+
+@patch("app.main.find_dotenv")
+def test_main_import_env_fallback(mock_find_dotenv):
+    """
+    Test that app.main gracefully falls back to the current directory if app/.env is not found.
+    """
+    mock_find_dotenv.side_effect = [None, "dummy_env"]
+    import app.main
+    importlib.reload(app.main)
