@@ -67,8 +67,8 @@ def supervisor_node(state: AgentState):
         # Prompt the LLM to route the query
         system_prompt = """You are an expert routing assistant for a loan processing system. Your job is to determine the best agent to handle a user's query.
         The available agents are:
-        - 'sql_agent': Use for questions about specific loan details like "what is my balance?", "show my EMI amount", or any query that requires fetching exact data for a specific loan from a database.
-        - 'policy_agent': Use for general questions about company rules, prepayment policies, top-up eligibility criteria, or regulatory guidelines.
+        - 'sql_agent': Use for questions about specific loan details like "what is my balance?", "show my EMI amount", checking if a specific loan ID (e.g., LN2003) is eligible for a top-up, or any query that requires fetching exact data for a specific loan from a database.
+        - 'policy_agent': Use for general questions about company rules, prepayment policies, general top-up eligibility criteria, or regulatory guidelines.
         - 'calculator_agent': Use for "what-if" scenarios, such as "what happens if I prepay 50,000?", or any query that requires mathematical calculation.
         - 'end_conversation': Use for simple greetings, thank yous, or any query that does not require using a tool.
         """
