@@ -87,16 +87,16 @@ def test_run_supervisor(mock_callback_class, mock_graph):
     
     res = run_supervisor("This is a query", user_id="user-999")
     
-    mock_callback_class.assert_called_once_with(
-        public_key="pk-lf-test",
-        secret_key="sk-lf-test",
-        host="https://test.langfuse.com",
-        trace_name="LoanNavigator-Trace",
-        user_id="user-999",
-        metadata={"query_source": "streamlit-ui"}
-    )
+    mock_callback_class.assert_called_once_with()
     mock_graph.invoke.assert_called_once_with(
         {"messages": [HumanMessage(content="This is a query")]},
-        config={"callbacks": [mock_callback_instance]}
+        config={
+            "callbacks": [mock_callback_instance],
+            "run_name": "LoanNavigator-Trace",
+            "metadata": {
+                "langfuse_user_id": "user-999",
+                "query_source": "streamlit-ui"
+            }
+        }
     )
     assert res["final_response"] == "Test finalized response"

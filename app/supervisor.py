@@ -275,20 +275,24 @@ app_graph = workflow.compile()
 # The entry point function remains the same
 def run_supervisor(query: str, user_id:str="default-user") -> dict:
     """Entry point to trigger the workflow."""
-    langfuse_callback = CallbackHandler(
-        public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-        secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-        host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
-        trace_name="LoanNavigator-Trace",
-        user_id=user_id,
-        metadata={"query_source": "streamlit-ui"}
-    )
+    # Initialize the Langfuse CallbackHandler. Keys are read automatically from environment variables.
+    langfuse_callback = CallbackHandler()
 
     initial_state = {
         "messages": [HumanMessage(content=query)],
     }
     # The invoke method will return the final state of the graph
-    final_state = app_graph.invoke(initial_state, config={"callbacks": [langfuse_callback]})
+    final_state = app_graph.invoke(
+        initial_state,
+        config={
+            "callbacks": [langfuse_callback],
+            "run_name": "LoanNavigator-Trace",
+            "metadata": {
+                "langfuse_user_id": user_id,
+                "query_source": "streamlit-ui"
+            }
+        }
+    )
 
     # Explicitly log the final outcome of the interaction for terminal and cloud logging
     final_resp = final_state.get("final_response", "")
