@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from app.state import AgentState
 from app.agents.policy_agent import policy_agent_node
 from app.supervisor import supervisor_node, RouteQuery, clarification_node
