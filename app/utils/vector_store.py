@@ -1,7 +1,7 @@
 import os
 import logging
 from langchain_community.vectorstores import Chroma
-from langchain_google_vertexai import VertexAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +11,7 @@ CHROMA_PATH = os.getenv("CHROMA_PATH", "data/chroma_db")
 # Optional: Ensure GCP project is set, otherwise default credentials apply
 PROJECT_ID = os.getenv("GCP_PROJECT_ID")
 LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-004")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
 
 def get_vector_store():
     """
@@ -23,9 +23,14 @@ def get_vector_store():
         raise FileNotFoundError(f"ChromaDB directory not found at {CHROMA_PATH}")
 
     try:
-        # Initialize Vertex AI embeddings model for retrieval
-        embeddings = VertexAIEmbeddings(
-            model_name=EMBEDDING_MODEL,
+        model_name = EMBEDDING_MODEL
+        # Prepend 'models/' prefix only if using Google AI Studio Developer API locally
+        if not PROJECT_ID and not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+
+        # Initialize Google Generative AI embeddings model for retrieval
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model=model_name,
             project=PROJECT_ID,
             location=LOCATION
         )

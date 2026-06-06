@@ -2,7 +2,7 @@ import os
 import logging
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_vertexai import VertexAIEmbeddings
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv, find_dotenv
 
@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Paths
-CHROMA_PATH = "data/chroma_db"
+CHROMA_PATH = os.getenv("CHROMA_PATH", "data/chroma_db")
 DATA_PATH = "data/policy_docs"
 
 def main():
@@ -52,12 +52,16 @@ def main():
 
     # 3. Initialize Embeddings (Using Vertex AI)
     try:
-        embeddings = VertexAIEmbeddings(
-            model_name=os.getenv("EMBEDDING_MODEL", "text-embedding-004"),
+        model_name = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
+        # Prepend 'models/' prefix only if using Google AI Studio Developer API locally
+        if not gcp_project and not model_name.startswith("models/"):
+            model_name = f"models/{model_name}"
+
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model=model_name,
             project=gcp_project,
             location=os.getenv("GCP_LOCATION", "us-central1")
         )
-                                                   
     except Exception as e:
         logger.error(f"❌ Failed to initialize Vertex AI Embeddings: {e}")
         return

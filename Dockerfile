@@ -20,8 +20,6 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r re
 # 2. Copy all your application code and data
 # This copies the `app` folder (with all its .py files) into the container
 COPY app/ /workspace/app/
-# This copies your SQLite and ChromaDB data into the container
-COPY data/ /workspace/data/
 
 # Expose the port Cloud Run will listen on
 EXPOSE 8080

@@ -2,6 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv, find_dotenv
 import logging
+import requests
 
 # ====================================================================
 # GOOGLE CLOUD OPERATIONS SUITE (LOGGING & MONITORING) INTEGRATION
@@ -33,8 +34,6 @@ if env_path:
 else:
     # If the .env file is in the root, find_dotenv() without args might work
     load_dotenv(find_dotenv())
-
-import requests
 
 # --- Streamlit Page Configuration ---
 st.set_page_config(
