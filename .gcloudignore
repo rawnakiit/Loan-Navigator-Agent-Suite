@@ -1,0 +1,18 @@
+# This file specifies files that are *not* uploaded to Google Cloud Platform using gcloud.
+.gcloudignore
+.git
+.gitignore
+
+# Ignore local virtual environments
+.venv/
+venv/
+env/
+
+# Ignore local configuration secrets
+app/.env
+.env
+
+# Ignore cache directories
+**/__pycache__/
+.pytest_cache/
+htmlcov/

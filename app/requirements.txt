@@ -7,11 +7,8 @@ langchain-community>=0.2.0
 langchain-chroma>=0.1.0
 google-cloud-secret-manager>=2.16.0
 google-cloud-storage>=2.10.0
-# langfuse>=2.0.0 # Uncomment if using Langfuse
-# mlflow>=2.0.0 # Uncomment if using MLflow
 chromadb>=0.4.24
 python-dotenv>=1.0.0
-langchain-chroma
 langchain-google-vertexai
 langchain-google-genai
 pypdf
@@ -20,3 +17,7 @@ streamlit==1.58.0
 langfuse==4.7.1
 google-cloud-monitoring
 google-cloud-logging
+
+# Testing and Coverage Dependencies
+pytest>=8.0.0
+pytest-cov>=6.0.0
