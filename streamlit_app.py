@@ -34,8 +34,7 @@ else:
     # If the .env file is in the root, find_dotenv() without args might work
     load_dotenv(find_dotenv())
 
-# Now that environment is set, we can import our application logic
-from app.supervisor import run_supervisor
+import requests
 
 # --- Streamlit Page Configuration ---
 st.set_page_config(
@@ -76,13 +75,27 @@ if prompt := st.chat_input("Ask about your loan, policies, or run a simulation..
         # Show a "thinking" spinner while the agent processes the query
         with st.spinner("Thinking..."):
             try:
-                # Call the main supervisor function with the user's query
-                result = run_supervisor(query=prompt,
-                                        user_id="streamlit_user_01")
+                backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
+                api_key = os.getenv("API_KEY", "")
                 
-                # The final, user-friendly response is in the 'final_response' key
-                response = result.get("final_response", "Sorry, I encountered an error and couldn't process your request.")
+                headers = {"X-API-Key": api_key} if api_key else {}
+                payload = {"query": prompt, "user_id": "streamlit_user_01"}
                 
+                response_http = requests.post(
+                    f"{backend_url}/api/v1/query",
+                    json=payload,
+                    headers=headers,
+                    timeout=60
+                )
+                
+                if response_http.status_code == 200:
+                    data = response_http.json()
+                    response = data.get("response", "No response found in server payload.")
+                elif response_http.status_code == 403:
+                    response = "Access Denied: The client failed to authorize against the agent gateway."
+                else:
+                    response = f"Backend Service Error: Received code {response_http.status_code} - {response_http.text}"
+                    
             except Exception as e:
                 st.error(f"An error occurred: {e}")
                 response = "I'm having some trouble connecting to my systems right now. Please try again later."
@@ -92,4 +105,3 @@ if prompt := st.chat_input("Ask about your loan, policies, or run a simulation..
 
     # 3. Add agent's response to the chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
-

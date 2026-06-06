@@ -20,13 +20,11 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r re
 # 2. Copy all your application code and data
 # This copies the `app` folder (with all its .py files) into the container
 COPY app/ /workspace/app/
-# This copies your main UI file into the container
-COPY streamlit_app.py /workspace/streamlit_app.py
 # This copies your SQLite and ChromaDB data into the container
 COPY data/ /workspace/data/
 
 # Expose the port Cloud Run will listen on
 EXPOSE 8080
 
-# The command to run your Streamlit app
-ENTRYPOINT ["streamlit", "run", "streamlit_app.py", "--server.port=8080", "--server.address=0.0.0.0"]
+# The command to run your FastAPI API service
+ENTRYPOINT ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
