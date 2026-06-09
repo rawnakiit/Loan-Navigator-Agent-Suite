@@ -1,5 +1,12 @@
 # Loan Navigator Agent Suite
 
+# Team Members
+- Aatish Shrenik Jain
+- Aayushi Jain
+- Meenakshi Kumari
+- Rawnak Kumar
+- Vivek K R
+
 ## Abstract
 In India’s fast-paced fintech space, **BlueLoans4all** is empowering micro-entrepreneurs by offering accessible, small-ticket loans. Their support centers face a deluge of repetitive yet vital queries like EMI status, prepayment scenarios, and top-up eligibility. This project introduces a multi-agent AI system, built using **LangGraph**, that acts as a smart "Loan Navigator". 
 
