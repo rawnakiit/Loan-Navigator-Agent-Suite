@@ -1,0 +1,56 @@
+name: Deploy Loan Navigator Suite to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # Runs automatically when you merge or push to main
+
+env:
+  PROJECT_ID: bdc-trainings
+  REGION: us-central1
+  SERVICE_NAME_BACKEND: loan-navigator-api
+  SERVICE_NAME_UI: loan-navigator-ui
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and Push Backend Container to Artifact Registry
+        run: |-
+          gcloud builds submit --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/loan-navigator/app:latest .
+
+      - name: Deploy Backend to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME_BACKEND }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/loan-navigator/app:latest
+          env_vars: |
+            GOOGLE_GENAI_USE_VERTEXAI=True
+            GEMINI_MODEL=gemini-2.5-flash
+            EMBEDDING_MODEL=models/gemini-embedding-001
+            LANGFUSE_HOST=https://cloud.langfuse.com
+            GCP_PROJECT_ID=bdc-trainings
+            GCP_LOCATION=us-central1
+          secrets: |
+            GOOGLE_API_KEY=google-api-key:latest
+            LANGFUSE_PUBLIC_KEY=langfuse-public-key:latest
+            LANGFUSE_SECRET_KEY=langfuse-secret-key:latest
+ 
